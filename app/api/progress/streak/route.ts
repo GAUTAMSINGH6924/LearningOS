@@ -75,7 +75,7 @@ export async function GET(req: Request) {
     let prev: string | null = null;
     for (const d of Array.from(activeDates).sort()) {
       if (prev) {
-        const prevDate = new Date(prev);
+        const prevDate: Date = new Date(prev);
         prevDate.setDate(prevDate.getDate() + 1);
         if (prevDate.toISOString().slice(0, 10) === d) {
           streak++;
