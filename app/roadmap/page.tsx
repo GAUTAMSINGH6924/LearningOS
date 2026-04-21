@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import RoadmapGraph from "@/components/RoadmapGraph";
+import { Pencil, Check, Play } from "lucide-react";
 
 type Session = { id: string; subject: string; level: string; created_at: string };
 
 export default function RoadmapPage() {
+  const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [steps, setSteps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stepsLoading, setStepsLoading] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedTitles, setEditedTitles] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [startingId, setStartingId] = useState<string | null>(null);
 
-  // Fetch all sessions for the user
   useEffect(() => {
     const fetchSessions = async () => {
       setLoading(true);
@@ -22,7 +28,6 @@ export default function RoadmapPage() {
           .from("roadmap_sessions")
           .select("id, subject, level, created_at")
           .order("created_at", { ascending: true });
-
         const list = (data || []) as Session[];
         setSessions(list);
         if (list.length > 0) setActiveSessionId(list[0].id);
@@ -34,7 +39,6 @@ export default function RoadmapPage() {
     fetchSessions();
   }, []);
 
-  // Fetch steps for the active session
   useEffect(() => {
     if (!activeSessionId) return;
     const fetchSteps = async () => {
@@ -50,21 +54,38 @@ export default function RoadmapPage() {
     fetchSteps();
   }, [activeSessionId]);
 
-  const handleStepClick = async (step: any) => {
+  const handleSaveEdits = async () => {
+    setSaving(true);
+    const updates = Object.entries(editedTitles).map(([stepId, step]) =>
+      fetch("/api/roadmap/update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepId, step }),
+      })
+    );
+    await Promise.all(updates);
+    setSteps((prev) =>
+      prev.map((s) => (editedTitles[s.id] ? { ...s, step: editedTitles[s.id] } : s))
+    );
+    setEditedTitles({});
+    setEditMode(false);
+    setSaving(false);
+  };
+
+  const handleStart = async (step: any) => {
+    setStartingId(step.id);
     try {
-      const res = await fetch("/api/get-link", {
+      const res = await fetch("/api/roadmap/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: step.platform, difficulty: step.difficulty, stepText: step.step }),
+        body: JSON.stringify({ stepId: step.id, userId: "user-1" }),
       });
       const data = await res.json();
-      if (!data.link) return;
-      window.open(data.link, "_blank");
-      await supabase.from("roadmap").update({ status: "completed" }).eq("id", step.id);
-      setSteps((prev) => prev.map((s) => s.id === step.id ? { ...s, status: "completed" } : s));
+      if (data.taskId) router.push(`/learn/${data.taskId}`);
     } catch (err) {
       console.error(err);
     }
+    setStartingId(null);
   };
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
@@ -74,8 +95,28 @@ export default function RoadmapPage() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-10">
       <div className="max-w-6xl mx-auto">
-        <p className="badge mb-2">Learning Path</p>
-        <h1 className="text-3xl font-bold mb-6">Your AI Roadmap</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <p className="badge mb-2">Learning Path</p>
+            <h1 className="text-3xl font-bold">Your AI Roadmap</h1>
+          </div>
+          <div className="flex gap-2">
+            {editMode ? (
+              <>
+                <button onClick={() => { setEditMode(false); setEditedTitles({}); }} className="btn-ghost text-sm">
+                  Cancel
+                </button>
+                <button onClick={handleSaveEdits} disabled={saving} className="btn-primary text-sm flex items-center gap-1.5">
+                  <Check size={14} /> {saving ? "Saving..." : "Save Changes"}
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setEditMode(true)} className="btn-ghost text-sm flex items-center gap-1.5">
+                <Pencil size={14} /> Edit Roadmap
+              </button>
+            )}
+          </div>
+        </div>
 
         {loading && <p className="text-zinc-400">Loading roadmaps...</p>}
 
@@ -92,7 +133,7 @@ export default function RoadmapPage() {
                 return (
                   <button
                     key={session.id}
-                    onClick={() => setActiveSessionId(session.id)}
+                    onClick={() => { setActiveSessionId(session.id); setEditMode(false); setEditedTitles({}); }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
                       isActive
                         ? "bg-indigo-600/20 border-indigo-500 text-indigo-300"
@@ -105,7 +146,7 @@ export default function RoadmapPage() {
               })}
             </div>
 
-            {/* Progress bar for active subject */}
+            {/* Progress bar */}
             {activeSession && (
               <div className="mb-6">
                 <div className="flex justify-between text-sm mb-2">
@@ -121,10 +162,53 @@ export default function RoadmapPage() {
               </div>
             )}
 
-            {/* Steps graph */}
             {stepsLoading && <p className="text-zinc-400">Loading steps...</p>}
-            {!stepsLoading && steps.length > 0 && (
-              <RoadmapGraph steps={steps} onStepClick={handleStepClick} />
+
+            {/* Edit mode: flat list with inputs */}
+            {!stepsLoading && steps.length > 0 && editMode && (
+              <div className="space-y-3">
+                {steps.map((step, idx) => (
+                  <div key={step.id} className="card flex items-center gap-4">
+                    <span className="text-zinc-500 text-sm w-6 shrink-0">{idx + 1}</span>
+                    <input
+                      value={editedTitles[step.id] ?? step.step}
+                      onChange={(e) =>
+                        setEditedTitles((prev) => ({ ...prev, [step.id]: e.target.value }))
+                      }
+                      className="field-input flex-1"
+                    />
+                    <span className={`badge shrink-0 text-xs ${step.status === "completed" ? "border-emerald-700 text-emerald-400" : "border-zinc-700 text-zinc-400"}`}>
+                      {step.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* View mode: graph + step list with Start buttons */}
+            {!stepsLoading && steps.length > 0 && !editMode && (
+              <>
+                <RoadmapGraph steps={steps} onStepClick={handleStart} />
+                <div className="mt-6 space-y-2">
+                  <h2 className="text-sm text-zinc-500 uppercase tracking-wider mb-3">Steps</h2>
+                  {steps.map((step, idx) => (
+                    <div key={step.id} className="card flex items-center gap-4 py-3">
+                      <span className="text-zinc-500 text-sm w-6 shrink-0">{idx + 1}</span>
+                      <span className="flex-1 text-sm">{step.step}</span>
+                      <span className={`badge shrink-0 text-xs ${step.status === "completed" ? "border-emerald-700 text-emerald-400" : "border-zinc-700 text-zinc-500"}`}>
+                        {step.status}
+                      </span>
+                      <button
+                        onClick={() => handleStart(step)}
+                        disabled={startingId === step.id}
+                        className="btn-primary text-xs px-3 py-1.5 shrink-0 flex items-center gap-1"
+                      >
+                        <Play size={12} /> {startingId === step.id ? "..." : "Start"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </>
         )}
