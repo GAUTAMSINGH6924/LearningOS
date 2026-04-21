@@ -8,6 +8,9 @@
   --accent: #6366f1;
   --text-secondary: #a1a1aa;
   --text-muted: #52525b;
+  --border-subtle: #333333;
+  --surface-raised: #1a1a1a;
+  --input-bg: #0f0f0f;
 }
 
 @theme inline {
@@ -69,19 +72,19 @@ body {
   color: var(--text-secondary);
   padding: 0.75rem 1.5rem;
   border-radius: 0.5rem;
-  border: 1px solid #333;
+  border: 1px solid var(--border-subtle);
   font-weight: 500;
   transition: background 0.15s, color 0.15s;
 }
 .btn-ghost:hover {
-  background: #1a1a1a;
+  background: var(--surface-raised);
   color: #fff;
 }
 
 /* ── Badge ── */
 .badge {
   display: inline-block;
-  background: #1a1a1a;
+  background: var(--surface-raised);
   color: var(--text-secondary);
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
@@ -94,7 +97,7 @@ body {
   font-size: 2rem;
   font-weight: 700;
   line-height: 1.2;
-  color: #fff;
+  color: var(--foreground);
   margin-bottom: 0.5rem;
 }
 .page-subheader {
@@ -106,8 +109,8 @@ body {
 /* ── Form fields ── */
 .field-input {
   width: 100%;
-  background: #0f0f0f;
-  border: 1px solid #333;
+  background: var(--input-bg);
+  border: 1px solid var(--border-subtle);
   border-radius: 0.5rem;
   padding: 0.75rem 1rem;
   color: #fff;
@@ -131,16 +134,11 @@ body {
   animation: fadeIn 0.35s ease both;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-8px); }
-}
-
 /* ── Progress bar ── */
 .progress-bar-track {
   width: 100%;
   height: 6px;
-  background: #1a1a1a;
+  background: var(--surface-raised);
   border-radius: 9999px;
   overflow: hidden;
 }
